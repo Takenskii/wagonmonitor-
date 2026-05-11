@@ -13,7 +13,7 @@ services:
     ports:
       - "5434:5432"  # host 5434 — порт 5432 занят на хосте другим postgres
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DATABASE__USER}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE__USER} -d ${DATABASE__NAME}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -27,8 +27,9 @@ services:
     env_file:
       - .env
     environment:
-      # Inside docker network postgres is reachable by service name
+      # Inside docker network — overrides .env host:port
       DATABASE__HOST: postgres
+      DATABASE__PORT: 5432
     ports:
       - "8000:8000"
     depends_on:

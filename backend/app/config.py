@@ -1,8 +1,12 @@
 """Application settings. Single source of truth for env-driven config."""
-from typing import Literal
+import pathlib
+from typing import Annotated, Literal
 
 import pydantic
 import pydantic_settings as pds
+
+# backend/app/config.py → repo root (.env lives there)
+_REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
 
 
 class DatabaseSettings(pydantic.BaseModel):
@@ -56,7 +60,7 @@ class Settings(pds.BaseSettings):
 
     model_config = pds.SettingsConfigDict(
         extra="ignore",
-        env_file=".env",
+        env_file=_REPO_ROOT / ".env",
         env_file_encoding="utf-8",
         env_nested_delimiter="__",
     )
@@ -65,7 +69,9 @@ class Settings(pds.BaseSettings):
     jwt: JWTSettings
     smtp: SMTPSettings = SMTPSettings()
 
-    cors_origins: set[str] = set()
+    # Annotated[..., NoDecode] tells pydantic-settings to skip JSON-decoding,
+    # so our `_parse_csv` validator can split the comma-separated string.
+    cors_origins: Annotated[set[str], pds.NoDecode] = set()
     public_url: pydantic.HttpUrl = pydantic.HttpUrl("http://localhost")
     app_timezone: str = "Asia/Almaty"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
@@ -75,6 +81,14 @@ class Settings(pds.BaseSettings):
     max_ingest_batch: int = 10_000
 
     is_test: bool = False
+
+    @pydantic.field_validator("cors_origins", mode="before")
+    @classmethod
+    def _parse_csv(cls, v: object) -> object:
+        """Accept comma-separated string from env, fall through for list/set inputs."""
+        if isinstance(v, str):
+            return {o.strip() for o in v.split(",") if o.strip()}
+        return v
 
     @pydantic.field_validator("cors_origins")
     @classmethod
