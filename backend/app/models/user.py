@@ -2,43 +2,38 @@
 from __future__ import annotations
 
 import uuid
+from typing import TYPE_CHECKING
 
-from sqlalchemy import Enum as SAEnum
-from sqlalchemy import String
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+import sqlalchemy as sa
+from sqlalchemy import orm
 
 from app.enums import UserRole
-from app.models.base import Base, CompanyOwnedMixin, TimestampMixin
+from app.models.base import Base
+
+if TYPE_CHECKING:
+    from app.models.company import Company
 
 
-class User(Base, CompanyOwnedMixin, TimestampMixin):
+class User(Base):
     __tablename__ = "users"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4,
-        comment="Идентификатор пользователя",
-    )
-    email: Mapped[str] = mapped_column(
-        String(255),
+    email: orm.Mapped[str] = orm.mapped_column(
+        sa.String(255),
         unique=True,
         nullable=False,
         index=True,
         comment="Email (глобально уникальный)",
         info={"group": "Профиль"},
     )
-    password_hash: Mapped[str] = mapped_column(
-        String(255),
+    password_hash: orm.Mapped[str] = orm.mapped_column(
+        sa.String(255),
         nullable=False,
     )
-    role: Mapped[UserRole] = mapped_column(
-        SAEnum(
+    role: orm.Mapped[UserRole] = orm.mapped_column(
+        sa.Enum(
             UserRole,
             name="user_role",
             native_enum=True,
-            # Store actual values ("superadmin"), not member names ("SUPERADMIN")
             values_callable=lambda enum_cls: [m.value for m in enum_cls],
         ),
         nullable=False,
@@ -46,8 +41,14 @@ class User(Base, CompanyOwnedMixin, TimestampMixin):
         comment="Роль в системе",
         info={"group": "Доступ"},
     )
-    full_name: Mapped[str | None] = mapped_column(
-        String(255),
+    full_name: orm.Mapped[str | None] = orm.mapped_column(
+        sa.String(255),
         comment="ФИО",
         info={"group": "Профиль"},
     )
+
+    company_id: orm.Mapped[uuid.UUID] = orm.mapped_column(
+        sa.ForeignKey("companies.id", ondelete="CASCADE"),
+        index=True,
+    )
+    company: orm.Mapped[Company] = orm.relationship(back_populates="users")

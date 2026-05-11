@@ -1,40 +1,32 @@
-"""ORM base class + shared mixins."""
+"""ORM base class."""
 from __future__ import annotations
 
+import datetime
+import functools
 import uuid
-from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, func
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+import sqlalchemy as sa
+from sqlalchemy import orm
 
-
-class Base(DeclarativeBase):
-    """Declarative base for all ORM models."""
+datetime_now_tz = functools.partial(datetime.datetime.now, tz=datetime.UTC)
 
 
-class TimestampMixin:
-    """Adds `created_at` with server-side default."""
+class Base(orm.DeclarativeBase):
+    """
+    Declarative base — every model gets:
+      - `pk`: int primary key (internal, ordering)
+      - `id`: UUID, used by foreign keys and external API references
+      - `created_at`, `updated_at`: timezone-aware Python-side timestamps
+    """
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
+    pk: orm.Mapped[int] = orm.mapped_column(primary_key=True)
+    id: orm.Mapped[uuid.UUID] = orm.mapped_column(unique=True, default=uuid.uuid4)
+    created_at: orm.Mapped[datetime.datetime] = orm.mapped_column(
+        sa.DateTime(timezone=True),
+        default=datetime_now_tz,
     )
-
-
-class CompanyOwnedMixin:
-    """
-    Adds `company_id` FK to `companies.id` (CASCADE on delete) + index.
-
-    Any model representing company-scoped data must inherit from this.
-    Queries against such models go through `deps.company_query()` helper —
-    never bare `select(Model).where(Model.company_id == ...)` in routers.
-    """
-
-    company_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("companies.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
+    updated_at: orm.Mapped[datetime.datetime] = orm.mapped_column(
+        sa.DateTime(timezone=True),
+        default=datetime_now_tz,
+        onupdate=datetime_now_tz,
     )
