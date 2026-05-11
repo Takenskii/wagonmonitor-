@@ -1,9 +1,9 @@
-import { useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Pencil, Trash2, Plus, Search } from 'lucide-react';
 
 import { adminApi, type Company } from '../api/admin';
 import { Modal } from '../components/Modal';
-import { KebabMenu, MenuItem } from '../components/KebabMenu';
 import { ApiError } from '../api/client';
 
 export default function CompaniesPage() {
@@ -15,42 +15,85 @@ export default function CompaniesPage() {
 
   const [editing, setEditing] = useState<Company | null>(null);
   const [creating, setCreating] = useState(false);
+  const [search, setSearch] = useState('');
+
+  const filtered = useMemo(() => {
+    if (!data) return [];
+    const q = search.trim().toLowerCase();
+    if (!q) return data;
+    return data.filter((c) => c.name.toLowerCase().includes(q));
+  }, [data, search]);
 
   const onChanged = () => qc.invalidateQueries({ queryKey: ['admin', 'companies'] });
 
   return (
-    <div className="p-8 max-w-6xl">
-      <button
-        onClick={() => setCreating(true)}
-        className="inline-flex items-center gap-2 px-4 py-2 border border-blue-200 bg-blue-50/60 text-blue-700 rounded-xl hover:bg-blue-100 text-sm font-medium transition-colors mb-6"
-      >
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M7 1v12M1 7h12" />
-        </svg>
-        Создать компанию
-      </button>
-
-      <h2 className="text-xl font-bold text-slate-900 mb-4">Компании</h2>
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Поиск:"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 w-64"
+          />
+        </div>
+        <div className="text-sm text-slate-500">
+          Всего: {filtered.length}
+          {search && data && search.length > 0 && filtered.length !== data.length
+            ? ` из ${data.length}` : ''}
+        </div>
+        <button
+          onClick={() => setCreating(true)}
+          className="inline-flex items-center gap-2 px-3 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm font-medium"
+        >
+          <Plus size={14} /> Создать
+        </button>
+      </div>
 
       {isLoading && <p className="text-slate-500">Загрузка…</p>}
       {error && (
         <p className="text-rose-600">Ошибка: {String((error as Error).message)}</p>
       )}
 
-      {data && data.length === 0 && (
-        <p className="text-slate-400 text-center py-12">Компании не созданы</p>
-      )}
-
-      {data && data.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {data.map((c) => (
-            <CompanyCard
-              key={c.id}
-              company={c}
-              onEdit={() => setEditing(c)}
-              onChanged={onChanged}
-            />
-          ))}
+      {data && (
+        <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="text-left px-4 py-2.5 font-semibold text-slate-700">Название</th>
+                <th className="text-left px-4 py-2.5 font-semibold text-slate-700">Создано</th>
+                <th className="w-40"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="text-center text-slate-400 py-8">
+                    {search ? 'Ничего не найдено' : 'Компании не созданы'}
+                  </td>
+                </tr>
+              )}
+              {filtered.map((c) => (
+                <tr key={c.id} className="hover:bg-slate-50">
+                  <td className="px-4 py-2.5 font-medium text-slate-800">{c.name}</td>
+                  <td className="px-4 py-2.5 text-slate-500 text-xs">
+                    {new Date(c.created_at).toLocaleDateString('ru-RU')}
+                  </td>
+                  <td className="px-4 py-2.5 text-right">
+                    <button
+                      onClick={() => setEditing(c)}
+                      className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs mr-3"
+                    >
+                      <Pencil size={12} /> Изменить
+                    </button>
+                    <DeleteButton id={c.id} name={c.name} onDone={onChanged} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
@@ -69,48 +112,28 @@ export default function CompaniesPage() {
   );
 }
 
-function CompanyCard({
-  company,
-  onEdit,
-  onChanged,
-}: {
-  company: Company;
-  onEdit: () => void;
-  onChanged: () => void;
-}) {
-  const deleteMut = useMutation({
-    mutationFn: () => adminApi.deleteCompany(company.id),
-    onSuccess: onChanged,
+function DeleteButton({ id, name, onDone }: { id: string; name: string; onDone: () => void }) {
+  const mutation = useMutation({
+    mutationFn: () => adminApi.deleteCompany(id),
+    onSuccess: onDone,
   });
-
-  const onDelete = () => {
+  const onClick = () => {
     if (
       window.confirm(
-        `Удалить компанию «${company.name}»?\nВсе её пользователи будут удалены вместе с ней.`,
+        `Удалить компанию «${name}»?\nВсе её пользователи будут удалены вместе с ней.`,
       )
     ) {
-      deleteMut.mutate();
+      mutation.mutate();
     }
   };
-
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-4 hover:shadow-md transition-shadow">
-      <div className="flex items-start gap-3">
-        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-200 to-blue-400 shrink-0" />
-        <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-slate-900 truncate" title={company.name}>
-            {company.name}
-          </h3>
-          <p className="text-xs text-slate-500 mt-1">
-            Создано {new Date(company.created_at).toLocaleDateString('ru-RU')}
-          </p>
-        </div>
-        <KebabMenu>
-          <MenuItem onClick={onEdit}>Изменить</MenuItem>
-          <MenuItem onClick={onDelete} danger>Удалить</MenuItem>
-        </KebabMenu>
-      </div>
-    </div>
+    <button
+      onClick={onClick}
+      disabled={mutation.isPending}
+      className="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700 text-xs disabled:opacity-50"
+    >
+      <Trash2 size={12} /> Удалить
+    </button>
   );
 }
 
@@ -156,7 +179,7 @@ function CompanyModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 border border-slate-200 rounded-xl text-sm"
+            className="px-4 py-2 border border-slate-200 rounded-lg text-sm"
           >
             Отмена
           </button>
@@ -164,7 +187,7 @@ function CompanyModal({
             type="submit"
             form="company-form"
             disabled={mutation.isPending}
-            className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm disabled:opacity-60"
+            className="px-4 py-2 bg-teal-600 text-white rounded-lg text-sm disabled:opacity-60"
           >
             {mutation.isPending ? 'Сохранение…' : 'Сохранить'}
           </button>
@@ -180,11 +203,11 @@ function CompanyModal({
             required
             minLength={1}
             maxLength={255}
-            className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
             autoFocus
           />
         </div>
-        {err && <p className="text-sm text-rose-600 bg-rose-50 px-3 py-2 rounded-xl">{err}</p>}
+        {err && <p className="text-sm text-rose-600 bg-rose-50 px-3 py-2 rounded-lg">{err}</p>}
       </form>
     </Modal>
   );

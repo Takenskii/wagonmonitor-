@@ -24,6 +24,8 @@ class Identity:
     user_id: uuid.UUID
     company_id: uuid.UUID
     role: UserRole
+    # Set when a superadmin is impersonating this user — for audit trail.
+    impersonated_by: uuid.UUID | None = None
 
 
 async def get_current_user(
@@ -36,10 +38,12 @@ async def get_current_user(
         raise fastapi.HTTPException(status_code=401, detail="Not authenticated")
     try:
         payload = decode_token(auth.credentials)
+        impersonated_by_raw = payload.get("impersonated_by")
         return Identity(
             user_id=uuid.UUID(payload["user_id"]),
             company_id=uuid.UUID(payload["company_id"]),
             role=UserRole(payload["role"]),
+            impersonated_by=uuid.UUID(impersonated_by_raw) if impersonated_by_raw else None,
         )
     except (InvalidTokenError, KeyError, ValueError) as e:
         raise fastapi.HTTPException(

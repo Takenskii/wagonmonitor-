@@ -13,8 +13,22 @@ from app.users.domain.models import User
 router = fastapi.APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 
-@router.post("/login", response_model=LoginResponse)
+@router.post(
+    "/login/",
+    summary="Вход в систему",
+    response_model=LoginResponse,
+    status_code=fastapi.status.HTTP_200_OK,
+    responses={
+        200: {"description": "Успешная авторизация — возвращается JWT"},
+        401: {"description": "Неверный email или пароль"},
+    },
+)
 async def login(req: LoginRequest, db: Session) -> LoginResponse:
+    """
+    Аутентификация пользователя.
+
+    Принимает email + пароль, проверяет учётные данные и возвращает JWT-токен.
+    """
     result = await db.execute(
         sa.select(User, Company)
         .join(Company, Company.id == User.company_id)
@@ -22,10 +36,16 @@ async def login(req: LoginRequest, db: Session) -> LoginResponse:
     )
     row = result.first()
     if row is None:
-        raise fastapi.HTTPException(status_code=401, detail="Invalid credentials")
+        raise fastapi.HTTPException(
+            status_code=fastapi.status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+        )
     user, company = row
     if not await verify_password(req.password, user.password_hash):
-        raise fastapi.HTTPException(status_code=401, detail="Invalid credentials")
+        raise fastapi.HTTPException(
+            status_code=fastapi.status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+        )
 
     token = create_access_token(
         user_id=user.id,
@@ -43,8 +63,23 @@ async def login(req: LoginRequest, db: Session) -> LoginResponse:
     )
 
 
-@router.get("/me", response_model=MeResponse)
+@router.get(
+    "/me/",
+    summary="Текущий пользователь",
+    response_model=MeResponse,
+    status_code=fastapi.status.HTTP_200_OK,
+    responses={
+        200: {"description": "Данные текущего пользователя"},
+        401: {"description": "Не аутентифицирован"},
+        404: {"description": "Пользователь не найден"},
+    },
+)
 async def me(current: CurrentUser, db: Session) -> MeResponse:
+    """
+    Получение данных текущего пользователя.
+
+    Возвращает идентичность пользователя по его JWT-токену.
+    """
     result = await db.execute(
         sa.select(User, Company)
         .join(Company, Company.id == User.company_id)
@@ -52,7 +87,10 @@ async def me(current: CurrentUser, db: Session) -> MeResponse:
     )
     row = result.first()
     if row is None:
-        raise fastapi.HTTPException(status_code=404, detail="User not found")
+        raise fastapi.HTTPException(
+            status_code=fastapi.status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
     user, company = row
     return MeResponse(
         id=user.id,

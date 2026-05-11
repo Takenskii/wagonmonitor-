@@ -1,9 +1,10 @@
-import { useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
+import { Pencil, Trash2, Plus, Search, KeyRound } from 'lucide-react';
 
 import { adminApi, type Role, type User } from '../api/admin';
 import { Modal } from '../components/Modal';
-import { KebabMenu, MenuItem } from '../components/KebabMenu';
 import { ApiError } from '../api/client';
 import { useAuth } from '../auth/useAuth';
 
@@ -13,24 +14,14 @@ const ROLE_LABEL: Record<Role, string> = {
   user: 'User',
 };
 
-const ROLE_PILL: Record<Role, string> = {
-  superadmin: 'bg-rose-50 text-rose-700 border border-rose-200',
-  admin: 'bg-blue-50 text-blue-700 border border-blue-200',
-  user: 'bg-slate-100 text-slate-700 border border-slate-200',
-};
-
-const ROLE_AVATAR: Record<Role, string> = {
-  superadmin: 'from-rose-200 to-rose-400',
-  admin: 'from-blue-200 to-blue-400',
-  user: 'from-slate-200 to-slate-400',
-};
-
 export default function UsersPage() {
-  const { user: me } = useAuth();
+  const { user: me, impersonate } = useAuth();
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const isSuperadmin = me?.role === 'superadmin';
 
   const [filterCompanyId, setFilterCompanyId] = useState<string>('');
+  const [search, setSearch] = useState('');
 
   const usersQuery = useQuery({
     queryKey: ['admin', 'users', filterCompanyId || 'all'],
@@ -42,65 +33,139 @@ export default function UsersPage() {
     enabled: isSuperadmin,
   });
 
+  const filtered = useMemo(() => {
+    if (!usersQuery.data) return [];
+    const q = search.trim().toLowerCase();
+    if (!q) return usersQuery.data;
+    return usersQuery.data.filter(
+      (u) =>
+        u.email.toLowerCase().includes(q) ||
+        (u.full_name ?? '').toLowerCase().includes(q),
+    );
+  }, [usersQuery.data, search]);
+
   const [editing, setEditing] = useState<User | null>(null);
   const [creating, setCreating] = useState(false);
 
   const onChanged = () => qc.invalidateQueries({ queryKey: ['admin', 'users'] });
-
   const companyName = (id: string) =>
     companiesQuery.data?.find((c) => c.id === id)?.name ?? id.slice(0, 8);
 
+  const onImpersonate = async (u: User) => {
+    if (!window.confirm(`Войти от имени «${u.email}»?`)) return;
+    try {
+      await impersonate(u.id);
+      navigate('/', { replace: true });
+    } catch (e) {
+      alert(e instanceof ApiError ? e.message : 'Ошибка');
+    }
+  };
+
   return (
-    <div className="p-8 max-w-6xl">
-      <div className="flex items-center gap-4 mb-6">
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Поиск:"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 w-64"
+            />
+          </div>
+          {isSuperadmin && companiesQuery.data && (
+            <select
+              value={filterCompanyId}
+              onChange={(e) => setFilterCompanyId(e.target.value)}
+              className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+            >
+              <option value="">Все компании</option>
+              {companiesQuery.data.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          )}
+        </div>
+        <div className="text-sm text-slate-500">
+          Всего: {filtered.length}
+          {search && usersQuery.data && filtered.length !== usersQuery.data.length
+            ? ` из ${usersQuery.data.length}` : ''}
+        </div>
         <button
           onClick={() => setCreating(true)}
-          className="inline-flex items-center gap-2 px-4 py-2 border border-blue-200 bg-blue-50/60 text-blue-700 rounded-xl hover:bg-blue-100 text-sm font-medium transition-colors"
+          className="inline-flex items-center gap-2 px-3 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm font-medium"
         >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M7 1v12M1 7h12" />
-          </svg>
-          Создать пользователя
+          <Plus size={14} /> Создать
         </button>
-
-        {isSuperadmin && companiesQuery.data && (
-          <select
-            value={filterCompanyId}
-            onChange={(e) => setFilterCompanyId(e.target.value)}
-            className="px-3 py-2 border border-slate-200 rounded-xl text-sm bg-white"
-          >
-            <option value="">Все компании</option>
-            {companiesQuery.data.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-        )}
       </div>
-
-      <h2 className="text-xl font-bold text-slate-900 mb-4">Пользователи</h2>
 
       {usersQuery.isLoading && <p className="text-slate-500">Загрузка…</p>}
       {usersQuery.error && (
         <p className="text-rose-600">Ошибка: {String((usersQuery.error as Error).message)}</p>
       )}
 
-      {usersQuery.data && usersQuery.data.length === 0 && (
-        <p className="text-slate-400 text-center py-12">Пользователи не найдены</p>
-      )}
-
-      {usersQuery.data && usersQuery.data.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {usersQuery.data.map((u) => (
-            <UserCard
-              key={u.id}
-              user={u}
-              isSelf={u.id === me?.user_id}
-              isSuperadmin={isSuperadmin}
-              companyName={companyName(u.company_id)}
-              onEdit={() => setEditing(u)}
-              onChanged={onChanged}
-            />
-          ))}
+      {usersQuery.data && (
+        <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="text-left px-4 py-2.5 font-semibold text-slate-700">Email</th>
+                <th className="text-left px-4 py-2.5 font-semibold text-slate-700">ФИО</th>
+                <th className="text-left px-4 py-2.5 font-semibold text-slate-700">Роль</th>
+                {isSuperadmin && (
+                  <th className="text-left px-4 py-2.5 font-semibold text-slate-700">Компания</th>
+                )}
+                <th className="w-72"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={isSuperadmin ? 5 : 4} className="text-center text-slate-400 py-8">
+                    {search ? 'Ничего не найдено' : 'Пользователи не найдены'}
+                  </td>
+                </tr>
+              )}
+              {filtered.map((u) => {
+                const isSelf = u.id === me?.user_id;
+                return (
+                  <tr key={u.id} className="hover:bg-slate-50">
+                    <td className="px-4 py-2.5 font-medium text-slate-800">{u.email}</td>
+                    <td className="px-4 py-2.5 text-slate-600">{u.full_name ?? '—'}</td>
+                    <td className="px-4 py-2.5">
+                      <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                        {ROLE_LABEL[u.role]}
+                      </span>
+                    </td>
+                    {isSuperadmin && (
+                      <td className="px-4 py-2.5 text-slate-500 text-xs">{companyName(u.company_id)}</td>
+                    )}
+                    <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                      {isSuperadmin && !isSelf && (
+                        <button
+                          onClick={() => onImpersonate(u)}
+                          className="inline-flex items-center gap-1 text-teal-600 hover:text-teal-800 text-xs mr-3"
+                        >
+                          <KeyRound size={12} /> Войти
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setEditing(u)}
+                        className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs mr-3"
+                      >
+                        <Pencil size={12} /> Изменить
+                      </button>
+                      {!isSelf && (
+                        <DeleteButton id={u.id} email={u.email} onDone={onChanged} />
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
 
@@ -127,72 +192,24 @@ export default function UsersPage() {
   );
 }
 
-function UserCard({
-  user,
-  isSelf,
-  isSuperadmin,
-  companyName,
-  onEdit,
-  onChanged,
-}: {
-  user: User;
-  isSelf: boolean;
-  isSuperadmin: boolean;
-  companyName: string;
-  onEdit: () => void;
-  onChanged: () => void;
-}) {
-  const deleteMut = useMutation({
-    mutationFn: () => adminApi.deleteUser(user.id),
-    onSuccess: onChanged,
+function DeleteButton({ id, email, onDone }: { id: string; email: string; onDone: () => void }) {
+  const mutation = useMutation({
+    mutationFn: () => adminApi.deleteUser(id),
+    onSuccess: onDone,
   });
-
-  const onDelete = () => {
-    if (window.confirm(`Удалить пользователя «${user.email}»?`)) {
-      deleteMut.mutate();
+  const onClick = () => {
+    if (window.confirm(`Удалить пользователя «${email}»?`)) {
+      mutation.mutate();
     }
   };
-
-  const initial = (user.full_name ?? user.email).charAt(0).toUpperCase();
-
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-4 hover:shadow-md transition-shadow">
-      <div className="flex items-start gap-3">
-        <div
-          className={`w-12 h-12 rounded-xl bg-gradient-to-br ${ROLE_AVATAR[user.role]} shrink-0 flex items-center justify-center text-white font-bold`}
-        >
-          {initial}
-        </div>
-        <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-slate-900 truncate" title={user.email}>
-            {user.email}
-          </h3>
-          <p className="text-xs text-slate-500 truncate">
-            {user.full_name ?? '— ФИО не указано —'}
-          </p>
-        </div>
-        <KebabMenu>
-          <MenuItem onClick={onEdit}>Изменить</MenuItem>
-          {!isSelf && (
-            <MenuItem onClick={onDelete} danger>Удалить</MenuItem>
-          )}
-        </KebabMenu>
-      </div>
-
-      <div className="flex items-center gap-2 mt-4 text-xs">
-        <span className={`px-2 py-0.5 rounded-full font-semibold ${ROLE_PILL[user.role]}`}>
-          {ROLE_LABEL[user.role]}
-        </span>
-        {isSuperadmin && (
-          <span className="text-slate-500 truncate" title={companyName}>
-            · {companyName}
-          </span>
-        )}
-        {isSelf && (
-          <span className="text-blue-600 font-medium">· вы</span>
-        )}
-      </div>
-    </div>
+    <button
+      onClick={onClick}
+      disabled={mutation.isPending}
+      className="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700 text-xs disabled:opacity-50"
+    >
+      <Trash2 size={12} /> Удалить
+    </button>
   );
 }
 
@@ -260,7 +277,7 @@ function UserModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 border border-slate-200 rounded-xl text-sm"
+            className="px-4 py-2 border border-slate-200 rounded-lg text-sm"
           >
             Отмена
           </button>
@@ -268,7 +285,7 @@ function UserModal({
             type="submit"
             form="user-form"
             disabled={mutation.isPending}
-            className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm disabled:opacity-60"
+            className="px-4 py-2 bg-teal-600 text-white rounded-lg text-sm disabled:opacity-60"
           >
             {mutation.isPending ? 'Сохранение…' : 'Сохранить'}
           </button>
@@ -283,7 +300,7 @@ function UserModal({
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
             autoFocus={!user}
           />
         </div>
@@ -298,7 +315,7 @@ function UserModal({
             onChange={(e) => setPassword(e.target.value)}
             required={!user}
             minLength={6}
-            className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
           />
         </div>
 
@@ -307,7 +324,7 @@ function UserModal({
           <input
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
-            className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
           />
         </div>
 
@@ -316,7 +333,7 @@ function UserModal({
           <select
             value={role}
             onChange={(e) => setRole(e.target.value as Role)}
-            className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
           >
             <option value="user">User</option>
             <option value="admin">Admin</option>
@@ -331,7 +348,7 @@ function UserModal({
               value={companyId}
               onChange={(e) => setCompanyId(e.target.value)}
               required
-              className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
             >
               <option value="">— выберите —</option>
               {companies.map((c) => (
@@ -341,7 +358,7 @@ function UserModal({
           </div>
         )}
 
-        {err && <p className="text-sm text-rose-600 bg-rose-50 px-3 py-2 rounded-xl">{err}</p>}
+        {err && <p className="text-sm text-rose-600 bg-rose-50 px-3 py-2 rounded-lg">{err}</p>}
       </form>
     </Modal>
   );

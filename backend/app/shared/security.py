@@ -32,15 +32,18 @@ def create_access_token(
     user_id: uuid.UUID,
     company_id: uuid.UUID,
     role: str,
+    impersonated_by: uuid.UUID | None = None,
 ) -> str:
     now = datetime_now_tz()
-    payload = {
+    payload: dict[str, object] = {
         "user_id": str(user_id),
         "company_id": str(company_id),
         "role": role,
         "iat": now,
         "exp": now + datetime.timedelta(hours=settings.jwt.expire_hours),
     }
+    if impersonated_by is not None:
+        payload["impersonated_by"] = str(impersonated_by)
     return jwt.encode(payload, settings.jwt.secret, algorithm=settings.jwt.algorithm)
 
 

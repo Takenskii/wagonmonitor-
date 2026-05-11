@@ -1,5 +1,6 @@
-/** Admin CRUD: companies + users. */
+/** Admin CRUD: companies + users + impersonate. */
 import { apiRequest } from './client';
+import type { LoginResponse } from './auth';
 
 export type Role = 'superadmin' | 'admin' | 'user';
 
@@ -45,23 +46,27 @@ export interface UserUpdate {
 
 export const adminApi = {
   // Companies
-  listCompanies: () => apiRequest<Company[]>('/admin/companies'),
+  listCompanies: () => apiRequest<Company[]>('/admin/companies/'),
   createCompany: (data: CompanyCreate) =>
-    apiRequest<Company>('/admin/companies', { method: 'POST', body: data }),
+    apiRequest<Company>('/admin/companies/', { method: 'POST', body: data }),
   updateCompany: (id: string, data: CompanyUpdate) =>
-    apiRequest<Company>(`/admin/companies/${id}`, { method: 'PATCH', body: data }),
+    apiRequest<Company>(`/admin/companies/${id}/`, { method: 'PATCH', body: data }),
   deleteCompany: (id: string) =>
-    apiRequest<void>(`/admin/companies/${id}`, { method: 'DELETE' }),
+    apiRequest<void>(`/admin/companies/${id}/`, { method: 'DELETE' }),
 
   // Users
   listUsers: (companyId?: string) =>
     apiRequest<User[]>(
-      `/admin/users${companyId ? `?company_id=${encodeURIComponent(companyId)}` : ''}`,
+      `/admin/users/${companyId ? `?company_id=${encodeURIComponent(companyId)}` : ''}`,
     ),
   createUser: (data: UserCreate) =>
-    apiRequest<User>('/admin/users', { method: 'POST', body: data }),
+    apiRequest<User>('/admin/users/', { method: 'POST', body: data }),
   updateUser: (id: string, data: UserUpdate) =>
-    apiRequest<User>(`/admin/users/${id}`, { method: 'PATCH', body: data }),
+    apiRequest<User>(`/admin/users/${id}/`, { method: 'PATCH', body: data }),
   deleteUser: (id: string) =>
-    apiRequest<void>(`/admin/users/${id}`, { method: 'DELETE' }),
+    apiRequest<void>(`/admin/users/${id}/`, { method: 'DELETE' }),
+
+  // Impersonate — returns LoginResponse-shape (token + identity)
+  impersonate: (userId: string) =>
+    apiRequest<LoginResponse>(`/admin/users/${userId}/impersonate/`, { method: 'POST' }),
 };
