@@ -10,9 +10,9 @@ import fastapi.security
 from jwt.exceptions import InvalidTokenError
 from sqlalchemy.ext import asyncio as asa
 
-from app.database import get_session
-from app.enums import UserRole
-from app.security import decode_token
+from app.shared.database.enums import UserRole
+from app.shared.database.session import get_session
+from app.shared.security import decode_token
 
 oauth2_scheme = fastapi.security.HTTPBearer(auto_error=False)
 

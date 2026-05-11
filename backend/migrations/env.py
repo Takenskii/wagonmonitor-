@@ -7,8 +7,12 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 
-from app.config import settings
-from app.models import Base  # noqa: F401 — triggers registration of all models on Base
+from app.shared.contrib.config import settings
+from app.shared.database.base import Base
+
+# Import all domain models so they register on Base.metadata (alembic autogenerate needs this)
+from app.companies.domain import models as _company_models  # noqa: F401
+from app.users.domain import models as _user_models  # noqa: F401
 
 # Alembic Config object — gives access to the values within the .ini file
 config = context.config

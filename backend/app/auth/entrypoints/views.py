@@ -4,10 +4,11 @@ from __future__ import annotations
 import fastapi
 import sqlalchemy as sa
 
-from app.deps import CurrentUser, Session
-from app.models import Company, User
-from app.schemas.auth import LoginRequest, LoginResponse, MeResponse
-from app.security import create_access_token, verify_password
+from app.companies.domain.models import Company
+from app.entrypoints.dependencies import CurrentUser, Session
+from app.entrypoints.schemas.auth import LoginRequest, LoginResponse, MeResponse
+from app.shared.security import create_access_token, verify_password
+from app.users.domain.models import User
 
 router = fastapi.APIRouter(prefix="/api/v1/auth", tags=["auth"])
 

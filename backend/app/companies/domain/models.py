@@ -6,10 +6,10 @@ from typing import TYPE_CHECKING
 import sqlalchemy as sa
 from sqlalchemy import orm
 
-from app.models.base import Base
+from app.shared.database.base import Base
 
 if TYPE_CHECKING:
-    from app.models.user import User
+    from app.users.domain.models import User
 
 
 class Company(Base):

@@ -5,8 +5,8 @@ from typing import Annotated, Literal
 import pydantic
 import pydantic_settings as pds
 
-# backend/app/config.py → repo root (.env lives there)
-_REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
+# backend/app/shared/contrib/config.py → repo root (.env lives there)
+_REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent.parent.parent.parent
 
 
 class DatabaseSettings(pydantic.BaseModel):

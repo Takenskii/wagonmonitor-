@@ -9,7 +9,7 @@ import uuid
 import bcrypt
 import jwt
 
-from app.config import settings
+from app.shared.contrib.config import settings
 
 datetime_now_tz = functools.partial(datetime.datetime.now, tz=datetime.UTC)
 

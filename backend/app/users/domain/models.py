@@ -7,11 +7,11 @@ from typing import TYPE_CHECKING
 import sqlalchemy as sa
 from sqlalchemy import orm
 
-from app.enums import UserRole
-from app.models.base import Base
+from app.shared.database.base import Base
+from app.shared.database.enums import UserRole
 
 if TYPE_CHECKING:
-    from app.models.company import Company
+    from app.companies.domain.models import Company
 
 
 class User(Base):

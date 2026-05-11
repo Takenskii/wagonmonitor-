@@ -1,4 +1,4 @@
-"""Internal CLI commands. Run with `uv run python -m app.cli <command>`."""
+"""Internal CLI commands. Run with `uv run python -m app.entrypoints.cli <command>`."""
 from __future__ import annotations
 
 import argparse
@@ -8,10 +8,11 @@ import sys
 
 import sqlalchemy as sa
 
-from app.database import get_session_bg
-from app.enums import UserRole
-from app.models import Company, User
-from app.security import hash_password
+from app.companies.domain.models import Company
+from app.shared.database.enums import UserRole
+from app.shared.database.session import get_session_bg
+from app.shared.security import hash_password
+from app.users.domain.models import User
 
 
 async def _seed_superadmin(email: str, password: str, company_name: str) -> None:
@@ -50,7 +51,7 @@ async def _seed_superadmin(email: str, password: str, company_name: str) -> None
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="app.cli")
+    parser = argparse.ArgumentParser(prog="app.entrypoints.cli")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     sa_cmd = sub.add_parser(

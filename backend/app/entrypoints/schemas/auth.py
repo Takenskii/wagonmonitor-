@@ -5,7 +5,7 @@ import uuid
 
 import pydantic
 
-from app.enums import UserRole
+from app.shared.database.enums import UserRole
 
 
 class LoginRequest(pydantic.BaseModel):
