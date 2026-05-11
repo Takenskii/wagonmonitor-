@@ -1,15 +1,14 @@
-/** Wrap a route to redirect to /login if there's no current user. */
-import { Navigate, useLocation } from 'react-router-dom';
-import type { ReactElement } from 'react';
+/** Redirects to /login if no current user. Renders nested routes via <Outlet />. */
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 
 import { useAuth } from '../auth/useAuth';
 
-export function RequireAuth({ children }: { children: ReactElement }) {
+export function RequireAuth() {
   const { user } = useAuth();
   const location = useLocation();
 
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
-  return children;
+  return <Outlet />;
 }

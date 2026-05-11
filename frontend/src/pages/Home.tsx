@@ -4,44 +4,47 @@ import { authApi } from '../api/auth';
 import { useAuth } from '../auth/useAuth';
 
 export default function HomePage() {
-  const { user, logout } = useAuth();
-  const { data, isLoading, error } = useQuery({
+  const { user } = useAuth();
+  const { data } = useQuery({
     queryKey: ['me'],
     queryFn: authApi.me,
     staleTime: 60_000,
   });
 
   return (
-    <div className="min-h-screen p-8 bg-slate-50">
-      <div className="max-w-3xl mx-auto bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-xl font-bold text-slate-900">Wagon Monitor</h1>
-          <button
-            onClick={logout}
-            className="text-sm text-rose-600 hover:text-rose-700"
-          >
-            Выйти
-          </button>
+    <div className="p-8 max-w-3xl">
+      <h1 className="text-2xl font-bold text-slate-900 mb-6">Главная</h1>
+
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">
+            Текущий пользователь
+          </h2>
+          <div className="text-slate-700">
+            <div>
+              <span className="text-slate-400">Email:</span> {user?.email}
+            </div>
+            <div>
+              <span className="text-slate-400">ФИО:</span> {user?.full_name ?? '—'}
+            </div>
+            <div>
+              <span className="text-slate-400">Роль:</span> {user?.role}
+            </div>
+            <div>
+              <span className="text-slate-400">Компания:</span> {user?.company_name}
+            </div>
+          </div>
         </div>
 
-        <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">
-          Идентичность из JWT (localStorage)
-        </h2>
-        <pre className="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3 overflow-auto mb-6">
-          {JSON.stringify(user, null, 2)}
-        </pre>
-
-        <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">
-          /api/v1/auth/me (свежий запрос)
-        </h2>
-        {isLoading && <p className="text-sm text-slate-500">Загрузка…</p>}
-        {error && (
-          <p className="text-sm text-rose-600">Ошибка: {String((error as Error).message)}</p>
-        )}
         {data && (
-          <pre className="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3 overflow-auto">
-            {JSON.stringify(data, null, 2)}
-          </pre>
+          <details>
+            <summary className="text-sm font-semibold text-slate-500 uppercase tracking-wide cursor-pointer">
+              Raw /me ответ
+            </summary>
+            <pre className="mt-2 text-xs bg-slate-50 border border-slate-200 rounded-lg p-3 overflow-auto">
+              {JSON.stringify(data, null, 2)}
+            </pre>
+          </details>
         )}
       </div>
     </div>
