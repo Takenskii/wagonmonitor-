@@ -2,13 +2,11 @@
 from __future__ import annotations
 
 import fastapi
-import sqlalchemy as sa
 
-from app.companies.domain.models import Company
+from app.auth.application import handlers, views
+from app.auth.application.handlers import InvalidCredentialsError
 from app.entrypoints.dependencies import CurrentUser, Session
 from app.entrypoints.schemas.auth import LoginRequest, LoginResponse, MeResponse
-from app.shared.security import create_access_token, verify_password
-from app.users.domain.models import User
 
 router = fastapi.APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -27,39 +25,26 @@ async def login(req: LoginRequest, db: Session) -> LoginResponse:
     """
     Аутентификация пользователя.
 
-    Принимает email + пароль, проверяет учётные данные и возвращает JWT-токен.
+    Принимает email + пароль, проверяет учётные данные, возвращает JWT-токен.
     """
-    result = await db.execute(
-        sa.select(User, Company)
-        .join(Company, Company.id == User.company_id)
-        .where(User.email == req.email)
-    )
-    row = result.first()
-    if row is None:
+    try:
+        token, user_view = await handlers.login(
+            email=req.email, password=req.password, session=db,
+        )
+    except InvalidCredentialsError:
         raise fastapi.HTTPException(
             status_code=fastapi.status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
-        )
-    user, company = row
-    if not await verify_password(req.password, user.password_hash):
-        raise fastapi.HTTPException(
-            status_code=fastapi.status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
-        )
+        ) from None
 
-    token = create_access_token(
-        user_id=user.id,
-        company_id=company.id,
-        role=user.role.value,
-    )
     return LoginResponse(
         token=token,
-        user_id=user.id,
-        email=user.email,
-        full_name=user.full_name,
-        role=user.role,
-        company_id=company.id,
-        company_name=company.name,
+        user_id=user_view.id,
+        email=user_view.email,
+        full_name=user_view.full_name,
+        role=user_view.role,
+        company_id=user_view.company_id,
+        company_name=user_view.company_name,
     )
 
 
@@ -76,27 +61,20 @@ async def login(req: LoginRequest, db: Session) -> LoginResponse:
 )
 async def me(current: CurrentUser, db: Session) -> MeResponse:
     """
-    Получение данных текущего пользователя.
-
-    Возвращает идентичность пользователя по его JWT-токену.
+    Получение данных текущего пользователя по JWT-токену.
     """
-    result = await db.execute(
-        sa.select(User, Company)
-        .join(Company, Company.id == User.company_id)
-        .where(User.id == current.user_id)
-    )
-    row = result.first()
-    if row is None:
+    try:
+        user_view = await views.get_me_view(user_id=current.user_id, session=db)
+    except LookupError:
         raise fastapi.HTTPException(
-            status_code=fastapi.status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
-    user, company = row
+            status_code=fastapi.status.HTTP_404_NOT_FOUND, detail="User not found"
+        ) from None
+
     return MeResponse(
-        id=user.id,
-        email=user.email,
-        full_name=user.full_name,
-        role=user.role,
-        company_id=company.id,
-        company_name=company.name,
+        id=user_view.id,
+        email=user_view.email,
+        full_name=user_view.full_name,
+        role=user_view.role,
+        company_id=user_view.company_id,
+        company_name=user_view.company_name,
     )
