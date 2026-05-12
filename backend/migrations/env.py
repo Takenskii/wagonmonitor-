@@ -12,7 +12,10 @@ from app.shared.database.base import Base
 
 # Import all domain models so they register on Base.metadata (alembic autogenerate needs this)
 from app.companies.domain import models as _company_models  # noqa: F401
+from app.groups.domain import models as _group_models  # noqa: F401
+from app.tracking.domain import models as _tracking_models  # noqa: F401
 from app.users.domain import models as _user_models  # noqa: F401
+from app.wagons.domain import models as _wagon_models  # noqa: F401
 
 # Alembic Config object — gives access to the values within the .ini file
 config = context.config
