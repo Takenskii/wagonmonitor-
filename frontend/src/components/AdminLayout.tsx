@@ -25,7 +25,7 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { to: '/', label: 'Слежение', icon: MapPin, roles: ['superadmin', 'admin', 'user'] },
+  { to: '/dislocations', label: 'Слежение', icon: MapPin, roles: ['superadmin', 'admin', 'user'] },
   { to: '/groups', label: 'Группы вагонов', icon: Train, roles: ['superadmin', 'admin', 'user'] },
   { to: '/reports', label: 'Почтовые рассылки', icon: Mail, roles: ['superadmin', 'admin', 'user'] },
   { to: '/audit', label: 'Журнал операций', icon: ScrollText, roles: ['superadmin', 'admin'] },
@@ -64,7 +64,7 @@ export default function AdminLayout() {
             <NavLink
               key={to}
               to={to}
-              end={to === '/'}
+              end={to === '/dislocations'}
               className={({ isActive }) =>
                 `flex items-center justify-between gap-2 px-4 py-2.5 text-sm transition-colors ${
                   isActive

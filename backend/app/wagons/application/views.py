@@ -18,24 +18,29 @@ from app.wagons.domain.models import Wagon
 
 
 class WagonDislocation(pydantic.BaseModel):
-    """Денормализованный вагон для страницы «Слежение»: данные вагона + tracking-инфо."""
+    """Денормализованный вагон для страницы «Слежение»: tracking + (опционально) данные вагона.
+
+    Если вагон ещё не был получен через ingestion (компания поставила его на слежение
+    раньше) — все wagon-поля приходят как None. Запись всё равно показывается
+    в UI как «ожидает дислокации».
+    """
 
     model_config = pydantic.ConfigDict(from_attributes=True)
 
-    # ── Идентификаторы ────────────────────────────────────────────────────────
-    id: uuid.UUID = pydantic.Field(description="UUID вагона в нашей БД")
+    # ── Идентификаторы (всегда из tracking_assignment) ────────────────────────
+    track_id: uuid.UUID = pydantic.Field(description="ID записи tracking_assignment")
     number: str = pydantic.Field(description="Номер вагона/контейнера")
 
     # ── Tracking-инфа ─────────────────────────────────────────────────────────
-    track_id: uuid.UUID = pydantic.Field(description="ID записи tracking_assignment")
     group_id: uuid.UUID | None = pydantic.Field(default=None, description="ID группы")
     group_name: str | None = pydantic.Field(default=None, description="Название группы")
     active: bool = pydantic.Field(description="Активно ли слежение")
     removed_at: datetime.datetime | None = pydantic.Field(default=None)
 
-    # ── Анкор ─────────────────────────────────────────────────────────────────
-    first_seen: datetime.datetime
-    last_seen: datetime.datetime
+    # ── Wagon-инфа (None если вагон ещё не пришёл через ingestion) ────────────
+    wagon_id: uuid.UUID | None = pydantic.Field(default=None, description="UUID вагона в нашей БД")
+    first_seen: datetime.datetime | None = None
+    last_seen: datetime.datetime | None = None
     last_source: str | None = None
 
     # ── Все остальные поля вагона ─────────────────────────────────────────────
@@ -114,22 +119,32 @@ class WagonDislocation(pydantic.BaseModel):
     nsp_indicator: str | None = None
 
 
-_WAGON_FIELDS = {c.name for c in Wagon.__table__.columns} - {"pk", "created_at", "updated_at", "raw_data"}
+# Wagon-колонки которые попадают в выход (без служебных и без id/number — их мы
+# заполняем явно: number — из tracking_assignment, id — как wagon_id если есть).
+_WAGON_FIELDS = {c.name for c in Wagon.__table__.columns} - {
+    "pk", "created_at", "updated_at", "raw_data", "id", "number",
+}
 
 
 def _build_view(
-    wagon: Wagon,
     ta: TrackingAssignment,
+    wagon: Wagon | None,
     group: WagonGroup | None,
 ) -> WagonDislocation:
-    """Собрать денормализованный WagonDislocation из ORM-объектов."""
+    """Собрать денормализованный WagonDislocation. wagon=None если ещё не пришёл через ingestion."""
+    wagon_data: dict = {}
+    if wagon is not None:
+        wagon_data = {name: getattr(wagon, name) for name in _WAGON_FIELDS}
+        wagon_data["wagon_id"] = wagon.id
+
     return WagonDislocation(
-        **{name: getattr(wagon, name) for name in _WAGON_FIELDS},
         track_id=ta.id,
+        number=ta.wagon_number,
         group_id=ta.group_id,
         group_name=group.name if group is not None else None,
         active=ta.active,
         removed_at=ta.removed_at,
+        **wagon_data,
     )
 
 
@@ -144,18 +159,15 @@ async def get_dislocation_list(
     """
     Список вагонов на слежении у компании.
 
-    JOIN'ит wagons + tracking_assignments + (опционально) wagon_groups.
-    Фильтры:
-      - status: active (по умолчанию) / archived / all
-      - group_id: только вагоны в указанной группе
-      - search: поиск по номеру вагона (ilike)
+    Идём ОТ tracking_assignments, LEFT JOIN'им wagons и wagon_groups —
+    показываем и те ряды, для которых вагон ещё не пришёл через ingestion.
     """
     stmt = (
-        sa.select(Wagon, TrackingAssignment, WagonGroup)
-        .join(TrackingAssignment, TrackingAssignment.wagon_number == Wagon.number)
+        sa.select(TrackingAssignment, Wagon, WagonGroup)
+        .outerjoin(Wagon, Wagon.number == TrackingAssignment.wagon_number)
         .outerjoin(WagonGroup, WagonGroup.id == TrackingAssignment.group_id)
         .where(TrackingAssignment.company_id == company_id)
-        .order_by(Wagon.number)
+        .order_by(TrackingAssignment.wagon_number)
     )
 
     if status == "active":
@@ -167,7 +179,7 @@ async def get_dislocation_list(
         stmt = stmt.where(TrackingAssignment.group_id == group_id)
 
     if search:
-        stmt = stmt.where(Wagon.number.ilike(f"%{search}%"))
+        stmt = stmt.where(TrackingAssignment.wagon_number.ilike(f"%{search}%"))
 
     rows = (await session.execute(stmt)).all()
-    return [_build_view(w, ta, g) for w, ta, g in rows]
+    return [_build_view(ta, w, g) for ta, w, g in rows]
